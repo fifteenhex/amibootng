@@ -1,0 +1,3 @@
+[submodule "subprojects/amipicolibc"]
+	path = subprojects/amipicolibc
+	url = ../amipicolibc.git

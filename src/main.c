@@ -1,0 +1,213 @@
+/*
+ * amibootng - boot Linux/m68k from AmigaOS
+ *
+ * The kernel is loaded into the largest free block of fast RAM, followed
+ * by its bootinfo and ramdisk.  Once AmigaOS is shut out the lot is copied
+ * down to the start of fast RAM, where the kernel runs, and entered as
+ * QEMU's -kernel would enter it.
+ */
+#include <stdio.h>
+#include <string.h>
+#include "boot.h"
+#include "main.h"
+#include "util.h"
+
+/*
+ * head.S takes its page tables from the memory past _end and paging_init()
+ * reserves up to where it stopped, so a ramdisk must start beyond that.
+ * The tables take tens of KB on the machines tried; 1MB leaves room.
+ */
+#define RAMDISK_GAP     0x100000UL
+
+/* the kernel's amiga_models[], from AMI_500 */
+static const char *const models[] = {
+    "a500", "a500+", "a600", "a1000", "a1200", "a2000", "a2500", "a3000",
+    "a3000t", "a3000+", "a4000", "a4000t", "cdtv", "cd32", "draco",
+};
+
+/* amibootng's options, and the kernel command line from the rest */
+int parse_options(int argc, char **argv, struct options *o)
+{
+    int i;
+
+    memset(o, 0, sizeof(*o));
+    for (i = 0; i < argc; i++) {
+        if (!strncmp(argv[i], "ramdisk=", 8)) {
+            o->ramdisk = argv[i] + 8;
+        } else if (!strncmp(argv[i], "model=", 6)) {
+            o->model = argv[i] + 6;
+        } else if (!strcmp(argv[i], "noboot")) {
+            o->noboot = 1;
+        } else {
+            size_t len = strlen(o->cmdline);
+
+            if (snprintf(o->cmdline + len, sizeof(o->cmdline) - len, "%s%s",
+                         len ? " " : "", argv[i]) >=
+                (int)(sizeof(o->cmdline) - len)) {
+                error("kernel command line longer than %d",
+                      (int)sizeof(o->cmdline) - 1);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+/*
+ * Kickstart has an "A3000 bonus" or "A4000 bonus" module, and the A4000T's
+ * also has an "NCR scsi.device" for its SCSI.  Other machines have to be
+ * named with model=, or the kernel is told the model is unknown and only
+ * looks for the chips all Amigas have.
+ */
+static int detect_model(struct boot_params *bp, const char *model)
+{
+    unsigned bits = amigaos_chiprevbits();
+    unsigned i;
+
+    bp->chipset = bits & AMIGA_GFXF_AA_LISA ? CS_AGA :
+                  bits & AMIGA_GFXF_HR_DENISE ? CS_ECS : CS_OCS;
+
+    if (model) {
+        for (i = 0; i < sizeof(models) / sizeof(models[0]); i++) {
+            if (!strcmp(model, models[i])) {
+                bp->model = AMI_500 + i;
+                return 0;
+            }
+        }
+        error("unknown model %s", model);
+        return -1;
+    }
+
+    if (amigaos_findresident("A3000 bonus"))
+        bp->model = AMI_3000;
+    else if (amigaos_findresident("NCR scsi.device"))
+        bp->model = AMI_4000T;
+    else if (amigaos_findresident("A4000 bonus"))
+        bp->model = AMI_4000;
+    else
+        bp->model = AMI_UNKNOWN;
+    return 0;
+}
+
+/* the largest free block of fast RAM, retried if something takes it first */
+static uint8_t *alloc_largest(unsigned long *size)
+{
+    uint8_t *p = NULL;
+    int tries;
+
+    for (tries = 0; !p && tries < 3; tries++) {
+        *size = amigaos_availmem(AMIGA_MEMF_FAST | AMIGA_MEMF_LARGEST);
+        p = amigaos_allocmem(*size, AMIGA_MEMF_FAST);
+    }
+    return p;
+}
+
+int boot(const char *kernel, const struct options *o)
+{
+    struct boot_params bp = { 0 };
+    struct kernel_image ki;
+    unsigned long lo, hi, chip_lo, chip_hi, base, avail, len, room, bi_len;
+    uint8_t *region;
+    AmigaBPTR fh = 0;
+    int ret = 20;
+
+    if (!amigaos_fast_memory(&lo, &hi)) {
+        error("no fast RAM");
+        return 20;
+    }
+    if (!amigaos_chip_memory(&chip_lo, &chip_hi)) {
+        error("no chip RAM");
+        return 20;
+    }
+    /* lo is just past the region's MemHeader */
+    base = lo & ~(KERNEL_BASE_ALIGN - 1);
+    if (lo - base > 0x100) {
+        error("fast RAM at 0x%08lx is not 1MB aligned", lo);
+        return 20;
+    }
+
+    region = alloc_largest(&avail);
+    if (!region) {
+        error("out of memory");
+        return 20;
+    }
+
+    fh = amigaos_open(kernel, AMIGA_MODE_OLDFILE);
+    if (!fh) {
+        error("cannot open %s (error %ld)", kernel, amigaos_ioerr());
+        goto out;
+    }
+    if (elf_load(fh, region, avail, &ki))
+        goto out;
+    /* the kernel looks for its bootinfo at _end, as QEMU puts it */
+    len = ALIGN_UP(ki.high, 2);
+    room = avail - len;
+
+    if (o->ramdisk) {
+        unsigned long off = ALIGN_UP(len + RAMDISK_GAP, KERNEL_PAGE);
+        long rlen;
+
+        if (off >= avail) {
+            error("no room for %s", o->ramdisk);
+            goto out;
+        }
+        rlen = load_file(o->ramdisk, region + off, avail - off);
+        if (rlen < 0)
+            goto out;
+        if (!rlen) {
+            error("%s is empty", o->ramdisk);
+            goto out;
+        }
+        bp.ramdisk_addr = base + off;
+        bp.ramdisk_size = rlen;
+        room = off - len;
+    }
+
+    cpu_from_attnflags(amigaos_attnflags(), &bp.cpu, &bp.fpu, &bp.mmu);
+    if (detect_model(&bp, o->model))
+        goto out;
+    bp.memchunk_addr = base;
+    bp.memchunk_size = hi - base;
+    bp.chip_size = chip_hi;        /* chip RAM starts at 0 */
+    bp.command_line = o->cmdline[0] ? o->cmdline : NULL;
+
+    bi_len = bootinfo_build(region + len, room, &bp);
+    if (!bi_len) {
+        error("no room for the bootinfo");
+        goto out;
+    }
+    len = bp.ramdisk_addr ? bp.ramdisk_addr - base + bp.ramdisk_size
+                          : len + bi_len;
+
+    /* noboot is for trying things from a Shell, where this is seen */
+    if (o->noboot) {
+        printf("%s: entry 0x%08lx, %lu bytes to 0x%08lx, \"%s\"\n",
+               kernel, base + ki.entry, len, base, o->cmdline);
+        ret = 0;
+        goto out;
+    }
+
+    amigaos_close(fh);
+    /* head.S loads its own stack pointer before using the stack */
+    amigaos_takeover_reloc(region, (void *)base, len,
+                           (void *)(base + ki.entry),
+                           (void *)(base + ki.entry), NULL);
+out:
+    if (fh)
+        amigaos_close(fh);
+    amigaos_freemem(region, avail);
+    return ret;
+}
+
+int main(int argc, char **argv)
+{
+    struct options o;
+
+    if (argc < 2) {
+        printf("usage: amibootng <kernel> [options] [kernel arguments]\n");
+        return 20;
+    }
+    if (parse_options(argc - 2, argv + 2, &o))
+        return 20;
+    return boot(argv[1], &o);
+}
