@@ -1,0 +1,28 @@
+name: build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # amipicolibc, and picolibc inside it
+          submodules: recursive
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-m68k-linux-gnu meson ninja-build
+          pipx install amitools    # xdftool, for the install floppy
+      - name: Build
+        run: |
+          meson setup build --cross-file m68k-linux-gnu.txt
+          ninja -C build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amibootng
+          path: |
+            build/amibootng
+            build/amibootng-startup
+            build/amibootng.adf
