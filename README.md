@@ -10,6 +10,8 @@ the kernel is loaded into is passed on.
 
 Options:
 
+    @<file>          the words in <file>; a word starting with ';' or '#'
+                     comments out the rest of its line
     ramdisk=<file>   initrd
     model=<model>    a500, a500+, a600, a1000, a1200, a2000, a2500, a3000,
                      a3000t, a3000+, a4000, a4000t, cdtv, cd32 or draco

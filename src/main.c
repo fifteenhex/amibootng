@@ -199,15 +199,84 @@ out:
     return ret;
 }
 
+/*
+ * Append the words in path to argv, using buf for them.  A word starting
+ * with ';' or '#' comments out the rest of its line.
+ */
+static int expand_argfile(const char *path, char **argv, int *argc,
+                          char *buf, unsigned long size)
+{
+    char *p = buf, *end;
+    long len;
+
+    if (size < 2) {
+        error("no room for %s", path);
+        return -1;
+    }
+    len = load_file(path, buf, size - 1);
+    if (len < 0)
+        return -1;
+    end = p + len;
+    *end = 0;
+
+    while (p < end) {
+        if (*p == ';' || *p == '#') {
+            p = strchr(p, '\n') ?: end;
+        } else if ((unsigned char)*p > ' ') {
+            if (*argc == ARGV_MAX - 1) {
+                error("more than %d arguments", ARGV_MAX - 1);
+                return -1;
+            }
+            argv[(*argc)++] = p;
+            p += strcspn(p, " \t\r\n");
+            *p++ = 0;
+        } else {
+            p++;
+        }
+    }
+    return len;
+}
+
+/*
+ * Copy in to out with each @file replaced by its words, which are kept in
+ * buf.  The new argc, or -1.
+ */
+int expand_args(int argc, char **in, char **out, char *buf,
+                unsigned long size)
+{
+    int i, n = 0, used;
+
+    for (i = 0; i < argc; i++) {
+        if (in[i][0] == '@') {
+            used = expand_argfile(in[i] + 1, out, &n, buf, size);
+            if (used < 0)
+                return -1;
+            buf += used + 1;
+            size -= used + 1;
+        } else if (n == ARGV_MAX - 1) {
+            error("more than %d arguments", ARGV_MAX - 1);
+            return -1;
+        } else {
+            out[n++] = in[i];
+        }
+    }
+    out[n] = NULL;
+    return n;
+}
+
 int main(int argc, char **argv)
 {
+    static char *args[ARGV_MAX];
+    static char buf[ARGFILE_SIZE];
     struct options o;
+    int n;
 
     if (argc < 2) {
         printf("usage: amibootng <kernel> [options] [kernel arguments]\n");
         return 20;
     }
-    if (parse_options(argc - 2, argv + 2, &o))
+    n = expand_args(argc - 2, argv + 2, args, buf, sizeof(buf));
+    if (n < 0 || parse_options(n, args, &o))
         return 20;
     return boot(argv[1], &o);
 }
