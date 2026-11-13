@@ -50,6 +50,10 @@ when amitools' `xdftool` is on `PATH`.  The Installer is not included, so
 it has to be in `C:` on the Amiga, unless `-Dinstaller=<path>` puts it on
 the floppy.
 
+`test/` has a kernel config small enough to boot with an initramfs in
+16MB, a script that makes a busybox initramfs, and one that sets up a
+Workbench disk image for QEMU's A3000.
+
 ## Licence
 
 amibootng is under the GPL version 2, see `LICENSE`.
