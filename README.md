@@ -27,6 +27,9 @@ The model is only found on its own on an A3000, A4000 or A4000T, whose
 Kickstart says so; elsewhere the kernel only looks for the chips every
 Amiga has unless `model=` is given.
 
+A kernel with a `<kernel>.args` file next to it is booted with the
+arguments in that file instead, apart from `model=`, which is kept.
+
 ## Building
 
     git clone --recursive <repo>

@@ -1,6 +1,7 @@
 /*
  * Choose what to boot: every m68k kernel in a drawer, or the one kernel
- * given, plus AmigaOS.
+ * given, plus AmigaOS.  A kernel with a <kernel>.args file next to it boots
+ * with the arguments in that instead of those given here.
  */
 #include <stdio.h>
 #include <string.h>
@@ -40,6 +41,26 @@ static int scan(AmigaDir *d, const char *dir, int *def)
     return n;
 }
 
+/* boot kernel with its own .args, if it has one */
+static int boot_kernel(const char *kernel, const struct options *o)
+{
+    static char args_path[PATH_SIZE + 6], buf[ARGFILE_SIZE];
+    static char *args[ARGV_MAX];
+    char *at = args_path;
+    struct options own;
+    int n;
+
+    snprintf(args_path, sizeof(args_path), "@%s.args", kernel);
+    if (file_size(args_path + 1) < 0)
+        return boot(kernel, o);
+    n = expand_args(1, &at, args, buf, sizeof(buf));
+    if (n < 0 || parse_options(n, args, &own))
+        return 20;
+    if (!own.model)
+        own.model = o->model;   /* the machine, not the kernel */
+    return boot(kernel, &own);
+}
+
 int boot_menu(const char *path, const struct options *o)
 {
     static char kernel[PATH_SIZE];
@@ -75,7 +96,7 @@ int boot_menu(const char *path, const struct options *o)
     splash_status("Loading Linux...");
 
     if (!is_dir)
-        return boot(path, o);
+        return boot_kernel(path, o);
     join(kernel, sizeof(kernel), path, kernels[choice]);
-    return boot(kernel, o);
+    return boot_kernel(kernel, o);
 }

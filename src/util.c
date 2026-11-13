@@ -43,6 +43,19 @@ long load_file(const char *path, void *buf, unsigned long size)
     return len;
 }
 
+/* -1 if path cannot be opened */
+long file_size(const char *path)
+{
+    AmigaBPTR fh = amigaos_open(path, AMIGA_MODE_OLDFILE);
+    long len;
+
+    if (!fh)
+        return -1;
+    len = amigaos_size(fh);
+    amigaos_close(fh);
+    return len;
+}
+
 /* dir/name; no '/' after a volume or one that is already there */
 void join(char *out, size_t size, const char *dir, const char *name)
 {
