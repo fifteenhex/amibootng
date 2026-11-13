@@ -30,13 +30,25 @@ Amiga has unless `model=` is given.
 A kernel with a `<kernel>.args` file next to it is booted with the
 arguments in that file instead, apart from `model=`, which is kept.
 
+## Installing
+
+`amibootng.adf` is an install floppy for the AmigaOS Installer, which is on
+the Install disk of AmigaOS 3.x.  `Install-amibootng` copies amibootng to
+`C:`, makes a drawer for the kernels (`SYS:Linux`) with an
+`amibootng.args`, and adds amibootng to `S:Startup-Sequence` after
+`SetPatch`, keeping the original as `S:Startup-Sequence.pre-amibootng`.
+`Remove-amibootng` takes it out again.
+
 ## Building
 
     git clone --recursive <repo>
     meson setup build --cross-file m68k-linux-gnu.txt
     ninja -C build
 
-This needs `gcc-m68k-linux-gnu`, meson and ninja.
+This needs `gcc-m68k-linux-gnu`, meson and ninja.  The floppy is built
+when amitools' `xdftool` is on `PATH`.  The Installer is not included, so
+it has to be in `C:` on the Amiga, unless `-Dinstaller=<path>` puts it on
+the floppy.
 
 ## Licence
 

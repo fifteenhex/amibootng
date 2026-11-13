@@ -1,0 +1,60 @@
+; $VER: Install-amibootng 1.0 (13.11.2026)
+
+; Installer's closing "can be found in your ... drawer" names this
+(set @default-dest "C:")
+
+(set #dir
+  (askdir
+    (prompt "amibootng boots Linux/m68k from AmigaOS.  It runs from "
+            "S:Startup-Sequence after SetPatch and offers a menu of the "
+            "kernels in a drawer.\n\nChoose the drawer for the kernels "
+            "and amibootng.args.")
+    (help @askdir-help)
+    (default "SYS:Linux")
+    (newpath)))
+
+(set #delay
+  (asknumber
+    (prompt "Seconds to count down before booting the default kernel "
+            "(0 boots it straight away).")
+    (help @asknumber-help)
+    (range 0 60)
+    (default 5)))
+
+(set #startup
+  (askbool
+    (prompt "Add amibootng to S:Startup-Sequence after SetPatch?  The "
+            "original is kept as S:Startup-Sequence.pre-amibootng.")
+    (help "Without this nothing runs amibootng.")
+    (choices "Add it" "Skip")
+    (default 1)))
+
+(if (<> (exists #dir) 2)
+  (makedir #dir (prompt ("Creating %s" #dir)) (help @makedir-help)))
+
+(copyfiles
+  (prompt "Copying amibootng to C:")
+  (help @copyfiles-help)
+  (source "amibootng")
+  (dest "C:"))
+
+(set #args (tackon #dir "amibootng.args"))
+(if (= (exists #args) 0)
+  (textfile
+    (prompt ("Writing %s" #args))
+    (help @textfile-help)
+    (dest #args)
+    (append "; amibootng options and kernel arguments.  A kernel with its\n"
+            "; own <kernel>.args uses that instead.  See the README.\n")
+    (append ("delay=%ld console=tty0 video=amifb:pal\n" #delay))))
+
+(if #startup
+  (if (<> (run ("amibootng-startup ADD \"%s\"" #dir)
+               (prompt "Adding amibootng to S:Startup-Sequence")
+               (help "It goes after the SetPatch line."))
+          0)
+    ; (message) is skipped in Novice mode
+    (abort "S:Startup-Sequence could not be changed.  Add this after "
+           "SetPatch:\n\nC:amibootng \"" #dir "\" \"@" #args "\"")))
+
+(exit "Copy your kernels to " #dir "; vmlinux is the default.")

@@ -1,0 +1,15 @@
+; $VER: Remove-amibootng 1.0 (13.11.2026)
+
+(if (<> (run "amibootng-startup REMOVE"
+             (prompt "Taking amibootng out of S:Startup-Sequence")
+             (help "The lines the installer added are removed."))
+        0)
+  (abort "amibootng is not in S:Startup-Sequence, or it could not be "
+         "changed."))
+
+(if (= (exists "C:amibootng") 1)
+  (delete "C:amibootng" (prompt "Deleting C:amibootng") (help @delete-help)))
+
+; Installer's own closing text would say amibootng "can be found" somewhere
+(message "amibootng has been removed.  Your kernels are left in place.")
+(exit (quiet))

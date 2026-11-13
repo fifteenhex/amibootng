@@ -1,0 +1,2 @@
+option('installer', type: 'string', value: '',
+       description: 'Installer binary to put on amibootng.adf')

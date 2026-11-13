@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-logo.py header <logo.ppm> <out.h>
+Convert a kernel boot logo (an ASCII PPM from drivers/video/logo/):
 
-Convert a kernel boot logo (an ASCII PPM from drivers/video/logo/) to
-pen-indexed pixels and a 4-bit palette for the splash screen.  Pens 0, 1
-and 2 are black, white and light grey.
+  logo.py header <logo.ppm> <out.h>
+      pen-indexed pixels and a 4-bit palette for the splash screen; pens
+      0, 1 and 2 are black, white and light grey
+  logo.py icon <logo.ppm> <out.info> <default tool> [tooltype...]
+      a Workbench project icon of the logo at half size
 """
+import struct
 import sys
 
 
@@ -46,8 +49,63 @@ def header(rows, out):
         f.write('};\n')
 
 
+WB_PALETTE = [(0xaa, 0xaa, 0xaa), (0, 0, 0), (0xff, 0xff, 0xff),
+              (0x66, 0x88, 0xbb)]
+
+
+def icon_pens(rows):
+    """the logo in Workbench pens, its black background made pen 0"""
+    def nearest(c):
+        return min(range(4), key=lambda i: sum((a - b) ** 2 for a, b in
+                                               zip(c, WB_PALETTE[i])))
+    pens = [[nearest(c) for c in row] for row in rows]
+    h, w = len(pens), len(pens[0])
+    todo = [(x, y) for x in range(w) for y in (0, h - 1)] + \
+           [(x, y) for y in range(h) for x in (0, w - 1)]
+    while todo:
+        x, y = todo.pop()
+        if 0 <= x < w and 0 <= y < h and pens[y][x] == 1:
+            pens[y][x] = 0
+            todo += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+    return [row[::2] for row in pens[::2]]
+
+
+def cstring(s):
+    """a length-prefixed, NUL-terminated string as in a .info file"""
+    b = s.encode('latin-1') + b'\0'
+    return struct.pack('>I', len(b)) + b
+
+
+def icon(rows, out, tool, tooltypes):
+    pens = icon_pens(rows)
+    h, w = len(pens), len(pens[0])
+    # DiskObject: magic, version, embedded Gadget, WBPROJECT
+    data = struct.pack('>HH', 0xe310, 1)
+    data += struct.pack('>IhhhhHHHIIIIIHI', 0, 0, 0, w, h, 4, 0, 1,
+                        1, 0, 0, 0, 0, 0, 0)
+    data += struct.pack('>BBIIIIIII', 4, 0, 1, bool(tooltypes),
+                        0x80000000, 0x80000000, 0, 0, 8192)
+    # the Image: two planes, rows padded to words
+    data += struct.pack('>hhhhhIBBI', 0, 0, w, h, 2, 1, 3, 0, 0)
+    for plane in (0, 1):
+        for row in pens:
+            row = row + [0] * (-w % 16)
+            for x in range(0, len(row), 16):
+                bits = sum(1 << (15 - i) for i in range(16)
+                           if row[x + i] >> plane & 1)
+                data += struct.pack('>H', bits)
+    data += cstring(tool)
+    if tooltypes:
+        data += struct.pack('>I', (len(tooltypes) + 1) * 4)
+        data += b''.join(cstring(t) for t in tooltypes)
+    with open(out, 'wb') as f:
+        f.write(data)
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 4 and sys.argv[1] == 'header':
         header(read_ppm(sys.argv[2]), sys.argv[3])
+    elif len(sys.argv) >= 5 and sys.argv[1] == 'icon':
+        icon(read_ppm(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5:])
     else:
         sys.exit(__doc__)
