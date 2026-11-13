@@ -2,12 +2,15 @@
 #define AMIBOOTNG_MAIN_H
 
 #define ARGV_MAX        64
+#define DEFAULT_DELAY   5
 #define ARGFILE_SIZE    2048    /* for the words of @files */
 
 struct options {
     const char *ramdisk;
     const char *model;
     int noboot;
+    int nosplash;
+    int delay;
     char cmdline[256];
 };
 

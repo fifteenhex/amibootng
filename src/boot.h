@@ -71,6 +71,7 @@ struct boot_params {
     const char *command_line;               /* NULL: none */
 };
 
+int elf_check(const char *path);
 int elf_load(AmigaBPTR fh, uint8_t *base, unsigned long size,
              struct kernel_image *ki);
 

@@ -56,6 +56,19 @@ static int read_header(AmigaBPTR fh, struct elf32_hdr *eh)
     return 0;
 }
 
+int elf_check(const char *path)
+{
+    struct elf32_hdr eh;
+    AmigaBPTR fh = amigaos_open(path, AMIGA_MODE_OLDFILE);
+    int ret;
+
+    if (!fh)
+        return 0;
+    ret = !read_header(fh, &eh);
+    amigaos_close(fh);
+    return ret;
+}
+
 /*
  * Load the PT_LOAD segments at base + p_paddr (the kernel links at 0),
  * zeroing .bss.  size is the room at base.

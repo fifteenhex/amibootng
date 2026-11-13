@@ -1,17 +1,23 @@
 # amibootng
 
-Boots Linux/m68k from AmigaOS: it loads a kernel from an AmigaOS disk and
-hands the machine over to it the way QEMU's `-kernel` does.  It needs a
-68020 or better and fast RAM, and is meant to run after `SetPatch`, which
-sets up the CPU flags it reports to the kernel.  Only the fast RAM region
-the kernel is loaded into is passed on.
+Boots Linux/m68k from AmigaOS.  It runs from `S:Startup-Sequence` after
+`SetPatch`, shows Tux and a menu of the kernels in a drawer, and hands the
+machine to the chosen kernel the way QEMU's `-kernel` does.  It needs a
+68020 or better and fast RAM.  Only the fast RAM region the kernel is
+loaded into is passed on.
 
-    amibootng <kernel> [options] [kernel arguments]
+    amibootng <kernel or drawer> [options] [kernel arguments]
+
+A drawer is searched for m68k kernels; `vmlinux` is the default.  In the
+menu, Up/Down or a click stop the countdown, Return or a click on an entry
+boots it, and Esc or the right mouse button return to AmigaOS.
 
 Options:
 
     @<file>          the words in <file>; a word starting with ';' or '#'
                      comments out the rest of its line
+    delay=<s>        countdown before booting the default (5)
+    nosplash         boot the default without the menu
     ramdisk=<file>   initrd
     model=<model>    a500, a500+, a600, a1000, a1200, a2000, a2500, a3000,
                      a3000t, a3000+, a4000, a4000t, cdtv, cd32 or draco
@@ -32,3 +38,6 @@ This needs `gcc-m68k-linux-gnu`, meson and ninja.
 ## Licence
 
 amibootng is under the GPL version 2, see `LICENSE`.
+`data/logo_linux_vga16.ppm` is the Linux kernel's boot logo; Tux was drawn
+by Larry Ewing (lewing@isc.tamu.edu) using The GIMP, and may be used as
+long as he is credited.

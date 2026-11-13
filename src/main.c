@@ -7,9 +7,12 @@
  * QEMU's -kernel would enter it.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "boot.h"
 #include "main.h"
+#include "menu.h"
+#include "splash.h"
 #include "util.h"
 
 /*
@@ -31,13 +34,18 @@ int parse_options(int argc, char **argv, struct options *o)
     int i;
 
     memset(o, 0, sizeof(*o));
+    o->delay = DEFAULT_DELAY;
     for (i = 0; i < argc; i++) {
         if (!strncmp(argv[i], "ramdisk=", 8)) {
             o->ramdisk = argv[i] + 8;
         } else if (!strncmp(argv[i], "model=", 6)) {
             o->model = argv[i] + 6;
+        } else if (!strncmp(argv[i], "delay=", 6)) {
+            o->delay = atoi(argv[i] + 6);
         } else if (!strcmp(argv[i], "noboot")) {
             o->noboot = 1;
+        } else if (!strcmp(argv[i], "nosplash")) {
+            o->nosplash = 1;
         } else {
             size_t len = strlen(o->cmdline);
 
@@ -188,6 +196,7 @@ int boot(const char *kernel, const struct options *o)
     }
 
     amigaos_close(fh);
+    splash_status("Starting Linux...");
     /* head.S loads its own stack pointer before using the stack */
     amigaos_takeover_reloc(region, (void *)base, len,
                            (void *)(base + ki.entry),
@@ -269,14 +278,20 @@ int main(int argc, char **argv)
     static char *args[ARGV_MAX];
     static char buf[ARGFILE_SIZE];
     struct options o;
-    int n;
+    int n, ret;
 
     if (argc < 2) {
-        printf("usage: amibootng <kernel> [options] [kernel arguments]\n");
+        printf("usage: amibootng <kernel or drawer> [options] "
+               "[kernel arguments]\n");
         return 20;
     }
     n = expand_args(argc - 2, argv + 2, args, buf, sizeof(buf));
     if (n < 0 || parse_options(n, args, &o))
         return 20;
-    return boot(argv[1], &o);
+
+    ret = boot_menu(argv[1], &o);
+    if (ret >= 20)
+        splash_error(last_error());
+    splash_close();
+    return ret;
 }

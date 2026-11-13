@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include "util.h"
 
 /* large single reads came back corrupted from QEMU's A4000 IDE */
@@ -42,12 +43,28 @@ long load_file(const char *path, void *buf, unsigned long size)
     return len;
 }
 
+/* dir/name; no '/' after a volume or one that is already there */
+void join(char *out, size_t size, const char *dir, const char *name)
+{
+    size_t len = strlen(dir);
+    int sep = len && dir[len - 1] != ':' && dir[len - 1] != '/';
+
+    snprintf(out, size, "%s%s%s", dir, sep ? "/" : "", name);
+}
+
+static char message[160];
+
 void error(const char *fmt, ...)
 {
     va_list ap;
 
     va_start(ap, fmt);
-    vprintf(fmt, ap);
+    vsnprintf(message, sizeof(message), fmt, ap);
     va_end(ap);
-    printf("\n");
+    printf("%s\n", message);
+}
+
+const char *last_error(void)
+{
+    return message;
 }
