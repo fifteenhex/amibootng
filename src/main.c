@@ -15,6 +15,9 @@
 #include "serial.h"
 #include "splash.h"
 #include "util.h"
+#include "version.h"
+
+VERSTAG("amibootng");
 
 /*
  * head.S takes its page tables from the memory past _end and paging_init()
