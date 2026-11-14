@@ -16,7 +16,8 @@ logo_h = custom_target('logo.h',
 
 # picolibc is built for the 68020.  -fomit-frame-pointer frees a6 for
 # library calls (src/lvo.h).
-c_args = [ '-m68020', '-fno-pic', '-fomit-frame-pointer' ]
+c_args = (amipicolibc.get_variable('amigaos_c_args') +
+          [ '-m68020', '-fno-pic', '-fomit-frame-pointer' ])
 mkhunk = [ python, files('tools/mkhunk.py'), find_program('objcopy'),
            elf2hunk ]
 
