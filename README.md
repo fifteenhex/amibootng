@@ -12,7 +12,9 @@ loaded into is passed on.
 
 A drawer is searched for m68k kernels; `vmlinux` is the default.  In the
 menu, Up/Down or a click stop the countdown, Return or a click on an entry
-boots it, and Esc or the right mouse button return to AmigaOS.
+boots it, and Esc or the right mouse button return to AmigaOS, for which
+Tux makes way for the Boing ball.  A bar shows the kernel loading, and
+"Starting Linux..." is the last thing amibootng shows before entering it.
 
 Options:
 
@@ -57,6 +59,8 @@ It sends:
     args <...>        arguments accepted
     args cleared
     booting <kernel>
+    loaded <kernel>
+    starting <kernel>  the kernel is about to be entered
     boot cancelled
     error: <text>
     returning to AmigaOS   after an error, which any line dismisses
