@@ -17,7 +17,7 @@
 #include "util.h"
 #include "version.h"
 
-VERSTAG("amibootng");
+AMIGA_VERSTAG("amibootng", AMIBOOTNG_VERSION, AMIBOOTNG_DATE);
 
 /*
  * head.S takes its page tables from the memory past _end and paging_init()
