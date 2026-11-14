@@ -17,6 +17,8 @@ logo_h = custom_target('logo.h',
 # picolibc is built for the 68020.  -fomit-frame-pointer frees a6 for
 # library calls (src/lvo.h).
 c_args = [ '-m68020', '-fno-pic', '-fomit-frame-pointer' ]
+mkhunk = [ python, files('tools/mkhunk.py'), find_program('objcopy'),
+           elf2hunk ]
 
 programs = {
   'amibootng': [ 'src/main.c', 'src/menu.c', 'src/splash.c', 'src/elf.c',
@@ -35,7 +37,7 @@ foreach name, srcs : programs
   hunks += { name: custom_target(name,
     output: name,
     input: elf,
-    command: [ elf2hunk, '@INPUT@', '@OUTPUT@' ],
+    command: mkhunk + [ '@INPUT@', '@OUTPUT@' ],
     build_by_default: true) }
 endforeach
 
