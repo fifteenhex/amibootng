@@ -146,3 +146,23 @@ const char *last_error(void)
 {
     return last;
 }
+
+#ifdef AMIBOOTNG_TRACE
+void trace(const char *fmt, ...)
+{
+    static char buf[256];
+    void *sysbase = amigaos_execbase();
+    char here, *p;
+    va_list ap;
+    int len;
+
+    len = snprintf(buf, sizeof(buf), "trace %08lx: ", (unsigned long)&here);
+    va_start(ap, fmt);
+    vsnprintf(buf + len, sizeof(buf) - len, fmt, ap);
+    va_end(ap);
+    for (p = buf; *p; p++)
+        LP1(-516, sysbase, long, *p, d0);       /* RawPutChar */
+    LP1(-516, sysbase, long, '\r', d0);
+    LP1(-516, sysbase, long, '\n', d0);
+}
+#endif

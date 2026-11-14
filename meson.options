@@ -1,2 +1,4 @@
+option('trace', type: 'boolean', value: false,
+       description: 'Trace progress on the serial port through exec RawPutChar')
 option('installer', type: 'string', value: '',
        description: 'Installer binary to put on amibootng.adf')
