@@ -11,6 +11,9 @@
 #include <string.h>
 #include <strings.h>
 #include "util.h"
+#include "version.h"
+
+AMIGA_VERSTAG("amibootng-startup", AMIBOOTNG_VERSION, AMIBOOTNG_DATE);
 
 #define STARTUP         "S:Startup-Sequence"
 #define BACKUP          STARTUP ".pre-amibootng"
