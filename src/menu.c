@@ -43,6 +43,12 @@ static int scan(AmigaDir *d, const char *dir, int *def)
     return n;
 }
 
+/* the last entry, AmigaOS, gets the Boing ball */
+static void show_logo(int sel, int n)
+{
+    splash_logo(sel == n - 1 ? SPLASH_BOING : SPLASH_TUX);
+}
+
 static void print_entries(const char *const *labels, int n, int sel)
 {
     int i;
@@ -139,6 +145,7 @@ static int choose(const char *const *labels, int n, int def, int seconds)
     int entry;
 
     print_entries(labels, n, sel);
+    show_logo(sel, n);
     if (!counting)
         splash_draw_menu(labels, n, sel, hint);
     for (;;) {
@@ -175,6 +182,7 @@ static int choose(const char *const *labels, int n, int def, int seconds)
             case MENU_DOWN:
                 sel = (sel + (event == MENU_UP ? n - 1 : 1)) % n;
                 serial_print("%d %s *", sel, labels[sel]);
+                show_logo(sel, n);
                 splash_draw_menu(labels, n, sel, hint);
                 break;
             default:
@@ -270,6 +278,7 @@ int boot_menu(const char *path, const struct options *o)
         join(kernel, sizeof(kernel), path, kernels[choice]);
     else
         snprintf(kernel, sizeof(kernel), "%s", path);
+    splash_logo(SPLASH_TUX);
     splash_status("Loading Linux...");
     message("booting %s", kernel);
     return boot_kernel(kernel, o);

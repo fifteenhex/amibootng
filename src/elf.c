@@ -99,6 +99,10 @@ int elf_load(AmigaBPTR fh, uint8_t *base, unsigned long size,
         return -1;
     }
 
+    for (i = 0; i < eh.e_phnum; i++)
+        if (ph[i].p_type == PT_LOAD)
+            expect_read(ph[i].p_filesz);
+
     for (i = 0; i < eh.e_phnum; i++) {
         struct elf32_phdr *p = &ph[i];
 

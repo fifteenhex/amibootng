@@ -168,6 +168,10 @@ int boot(const char *kernel, const struct options *o)
         error("cannot open %s (error %ld)", kernel, amigaos_ioerr());
         goto out;
     }
+    /* elf_load() adds the kernel's segments to what the bar expects */
+    set_read_hook(splash_progress);
+    if (o->ramdisk && file_size(o->ramdisk) > 0)
+        expect_read(file_size(o->ramdisk));
     if (elf_load(fh, region, avail, &ki))
         goto out;
     /* the kernel looks for its bootinfo at _end, as QEMU puts it */
@@ -210,6 +214,8 @@ int boot(const char *kernel, const struct options *o)
     len = bp.ramdisk_addr ? bp.ramdisk_addr - base + bp.ramdisk_size
                           : len + bi_len;
 
+    message("loaded %s", kernel);
+
     if (o->noboot) {
         message("%s: entry 0x%08lx, %lu bytes to 0x%08lx, \"%s\"",
                 kernel, base + ki.entry, len, base, o->cmdline);
@@ -219,12 +225,14 @@ int boot(const char *kernel, const struct options *o)
 
     amigaos_close(fh);
     splash_status("Starting Linux...");
+    message("starting %s", kernel);
     serial_close();
     /* head.S loads its own stack pointer before using the stack */
     amigaos_takeover_reloc(region, (void *)base, len,
                            (void *)(base + ki.entry),
                            (void *)(base + ki.entry), NULL);
 out:
+    set_read_hook(NULL);
     if (fh)
         amigaos_close(fh);
     amigaos_freemem(region, avail);

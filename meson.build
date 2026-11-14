@@ -9,10 +9,15 @@ amigaos_glue = amipicolibc.get_variable('amigaos_glue')
 amigaos_inc = amipicolibc.get_variable('amigaos_inc')
 python = find_program('python3')
 
+boing_ppm = custom_target('boing.ppm',
+  output: 'boing.ppm',
+  command: [ python, files('tools/boing.py'), '@OUTPUT@' ])
+# Tux, and the Boing ball for AmigaOS
 logo_h = custom_target('logo.h',
   output: 'logo.h',
-  input: 'data/logo_linux_vga16.ppm',
-  command: [ python, files('tools/logo.py'), 'header', '@INPUT@', '@OUTPUT@' ])
+  input: [ 'data/logo_linux_vga16.ppm', boing_ppm ],
+  command: [ python, files('tools/logo.py'), 'header', '@OUTPUT@',
+             'tux=@INPUT0@', 'boing=@INPUT1@' ])
 
 # picolibc is built for the 68020.  -fomit-frame-pointer frees a6 for
 # library calls (src/lvo.h).

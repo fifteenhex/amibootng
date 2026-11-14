@@ -8,6 +8,7 @@
 #include "amigaos.h"
 #include "lvo.h"
 #include "splash.h"
+#include "util.h"
 #include "logo.h"
 
 static void *sysbase, *intuitionbase, *gfxbase;
@@ -94,7 +95,8 @@ struct colorspec {
 };
 
 static void *screen, *window, *rport;
-static int scale, logo_x, logo_y, text_y, line_h;
+static int scale, logo_x, logo_y, text_y, line_h, logo = -1;
+static int bar_end = -1;        /* how far the progress bar is filled */
 
 static unsigned short field16(void *p, int off)
 {
@@ -106,15 +108,24 @@ static void *field_ptr(void *p, int off)
     return *(void **)((char *)p + off);
 }
 
-static void draw_logo(void)
+void splash_logo(int which)
 {
+    static const int index[] = { [SPLASH_TUX] = LOGO_TUX,
+                                 [SPLASH_BOING] = LOGO_BOING };
+    const unsigned char (*pixels)[LOGO_WIDTH] = logo_pixels[index[which]];
     int x, y, end;
 
+    if (!screen || !scale || which == logo)
+        return;
+    logo = which;
+    SetAPen(rport, PEN_BLACK);
+    RectFill(rport, logo_x, logo_y, logo_x + LOGO_WIDTH * scale - 1,
+             logo_y + LOGO_HEIGHT * scale - 1);
     for (y = 0; y < LOGO_HEIGHT; y++) {
         for (x = 0; x < LOGO_WIDTH; x = end) {
-            int pen = logo_pixels[y][x];
+            int pen = pixels[y][x];
 
-            for (end = x + 1; end < LOGO_WIDTH && logo_pixels[y][end] == pen;
+            for (end = x + 1; end < LOGO_WIDTH && pixels[y][end] == pen;
                  end++)
                 ;
             if (pen == PEN_BLACK)
@@ -211,8 +222,8 @@ int splash_open(int lines)
     logo_x = (w - LOGO_WIDTH * scale) / 2;
     logo_y = (h - (LOGO_HEIGHT + LOGO_GAP) * scale - text_h) / 2;
     text_y = logo_y + (LOGO_HEIGHT + LOGO_GAP) * scale;
-    if (scale)
-        draw_logo();
+    splash_logo(SPLASH_TUX);
+    quiet_console(1);
     return 0;
 
 fail:
@@ -227,6 +238,7 @@ void splash_status(const char *s)
         RectFill(rport, 0, text_y, field16(screen, SC_WIDTH) - 1,
                  field16(screen, SC_HEIGHT) - 1);
         draw_line(0, s, 0);
+        bar_end = -1;
     }
 }
 
@@ -242,6 +254,33 @@ static int get_event(unsigned long *class, int *code, int *y)
     *y = (short)field16(msg, IM_MOUSEY);
     ReplyMsg(msg);
     return 1;
+}
+
+void splash_progress(unsigned long done, unsigned long total)
+{
+    int top = text_y + line_h, w, x0, x1, end;
+
+    if (!screen || !total)
+        return;
+    w = field16(screen, SC_WIDTH);
+    x0 = w / 8;
+    x1 = w - w / 8 - 1;
+    if (bar_end < 0) {
+        SetAPen(rport, PEN_WHITE);
+        RectFill(rport, x0, top + 1, x1, top + line_h - 2);
+        SetAPen(rport, PEN_BLACK);
+        RectFill(rport, x0 + 1, top + 2, x1 - 1, top + line_h - 3);
+        bar_end = x0;
+    }
+    if (done > total)
+        done = total;
+    /* in 256-byte units the product stays well inside 32 bits */
+    end = x0 + (x1 - x0 - 1) * (done >> 8) / ((total >> 8) + 1);
+    if (end > bar_end) {
+        SetAPen(rport, PEN_BAR);
+        RectFill(rport, bar_end + 1, top + 2, end, top + line_h - 3);
+        bar_end = end;
+    }
 }
 
 void splash_draw_menu(const char *const *labels, int n, int sel,
@@ -315,4 +354,6 @@ void splash_close(void)
     if (intuitionbase)
         CloseLibrary(intuitionbase);
     window = screen = gfxbase = intuitionbase = NULL;
+    logo = -1;
+    quiet_console(0);
 }

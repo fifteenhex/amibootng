@@ -7,6 +7,13 @@
 #define PATH_SIZE       256
 
 int read_full(AmigaBPTR fh, void *buf, unsigned long len);
+
+/*
+ * Progress: hook is called after each piece read_full() reads with the
+ * bytes read so far and the total expected, which expect_read() adds to.
+ */
+void set_read_hook(void (*hook)(unsigned long done, unsigned long total));
+void expect_read(unsigned long len);
 long load_file(const char *path, void *buf, unsigned long size);
 long file_size(const char *path);
 void join(char *out, size_t size, const char *dir, const char *name);
@@ -21,6 +28,12 @@ unsigned long wait_signals(unsigned long signals);
 /* print a message, and hand it to the hook if one is set */
 void message(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void set_message_hook(void (*hook)(const char *prefix, const char *msg));
+
+/*
+ * Keep messages off the console, whose window would cover the splash; the
+ * last one held back is printed when quiet is turned off again.
+ */
+void quiet_console(int quiet);
 
 /* message() an error, kept for last_error() */
 void error(const char *fmt, ...) __attribute__((format(printf, 1, 2)));

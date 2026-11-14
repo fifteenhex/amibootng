@@ -9,6 +9,14 @@ int splash_open(int lines);
 /* replace the text under the logo with s, if the screen is open */
 void splash_status(const char *s);
 
+/* a bar under the status line, done of total */
+void splash_progress(unsigned long done, unsigned long total);
+
+/* which logo to show */
+#define SPLASH_TUX      0
+#define SPLASH_BOING    1
+void splash_logo(int which);
+
 /* the n labels with sel highlighted, status under them, and a hint */
 void splash_draw_menu(const char *const *labels, int n, int sel,
                       const char *status);

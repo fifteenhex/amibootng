@@ -2,9 +2,10 @@
 """
 Convert a kernel boot logo (an ASCII PPM from drivers/video/logo/):
 
-  logo.py header <logo.ppm> <out.h>
-      pen-indexed pixels and a 4-bit palette for the splash screen; pens
-      0, 1 and 2 are black, white and light grey
+  logo.py header <out.h> <name>=<logo.ppm>...
+      pen-indexed pixels of each logo (all the same size), LOGO_<NAME>
+      indexes into them, and their shared 4-bit palette for the splash
+      screen; pens 0, 1 and 2 are black, white and light grey
   logo.py icon <logo.ppm> <out.info> <default tool> [tooltype...]
       a Workbench project icon of the logo at half size
 """
@@ -27,25 +28,35 @@ def read_ppm(path):
     return [px[y * w:(y + 1) * w] for y in range(h)]
 
 
-def header(rows, out):
+def header(out, names, images):
     pal = [(0, 0, 0), (255, 255, 255), (170, 170, 170)]
-    pal += [c for c in dict.fromkeys(c for row in rows for c in row)
-            if c not in pal]
+    pal += [c for c in dict.fromkeys(c for rows in images for row in rows
+                                     for c in row) if c not in pal]
     if len(pal) > 32:
         sys.exit(f'{len(pal)} colours, a lowres screen has 32')
+    if any(len(rows) != len(images[0]) or len(rows[0]) != len(images[0][0])
+           for rows in images):
+        sys.exit('the logos are not all the same size')
     with open(out, 'w') as f:
-        f.write(f'#define LOGO_WIDTH {len(rows[0])}\n'
-                f'#define LOGO_HEIGHT {len(rows)}\n'
+        f.write(f'#define LOGO_WIDTH {len(images[0][0])}\n'
+                f'#define LOGO_HEIGHT {len(images[0])}\n'
                 f'#define LOGO_COLOURS {len(pal)}\n'
                 f'#define LOGO_DEPTH {max(1, (len(pal) - 1).bit_length())}\n'
-                'static const unsigned char logo_palette[][3] = {\n')
+                f'#define LOGOS {len(images)}\n')
+        for i, name in enumerate(names):
+            f.write(f'#define LOGO_{name.upper()} {i}\n')
+        f.write('static const unsigned char logo_palette[][3] = {\n')
         for c in pal:
             f.write('    { %d, %d, %d },\n' % tuple((x * 15 + 127) // 255
                                                     for x in c))
         f.write('};\nstatic const unsigned char '
-                'logo_pixels[LOGO_HEIGHT][LOGO_WIDTH] = {\n')
-        for row in rows:
-            f.write('    { %s },\n' % ','.join(str(pal.index(c)) for c in row))
+                'logo_pixels[LOGOS][LOGO_HEIGHT][LOGO_WIDTH] = {\n')
+        for rows in images:
+            f.write('  {\n')
+            for row in rows:
+                f.write('    { %s },\n' % ','.join(str(pal.index(c))
+                                                  for c in row))
+            f.write('  },\n')
         f.write('};\n')
 
 
@@ -103,8 +114,10 @@ def icon(rows, out, tool, tooltypes):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 4 and sys.argv[1] == 'header':
-        header(read_ppm(sys.argv[2]), sys.argv[3])
+    if len(sys.argv) >= 4 and sys.argv[1] == 'header':
+        pairs = [a.split('=', 1) for a in sys.argv[3:]]
+        header(sys.argv[2], [n for n, _ in pairs],
+               [read_ppm(p) for _, p in pairs])
     elif len(sys.argv) >= 5 and sys.argv[1] == 'icon':
         icon(read_ppm(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5:])
     else:

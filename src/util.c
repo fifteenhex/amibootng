@@ -7,6 +7,20 @@
 /* large single reads came back corrupted from QEMU's A4000 IDE */
 #define READ_CHUNK      0x10000UL
 
+static void (*read_hook)(unsigned long done, unsigned long total);
+static unsigned long read_done, read_total;
+
+void set_read_hook(void (*hook)(unsigned long done, unsigned long total))
+{
+    read_hook = hook;
+    read_done = read_total = 0;
+}
+
+void expect_read(unsigned long len)
+{
+    read_total += len;
+}
+
 int read_full(AmigaBPTR fh, void *buf, unsigned long len)
 {
     char *p = buf;
@@ -18,6 +32,9 @@ int read_full(AmigaBPTR fh, void *buf, unsigned long len)
             return -1;
         p += n;
         len -= n;
+        read_done += n;
+        if (read_hook)
+            read_hook(read_done, read_total);
     }
     return 0;
 }
@@ -76,8 +93,18 @@ unsigned long wait_signals(unsigned long signals)
     return LP1(-318, amigaos_execbase(), unsigned long, signals, d0);
 }
 
-static char last[160];
+static char last[160], held[160];
 static void (*message_hook)(const char *prefix, const char *msg);
+static int console_quiet;
+
+void quiet_console(int quiet)
+{
+    console_quiet = quiet;
+    if (!quiet && held[0]) {
+        printf("%s\n", held);
+        held[0] = 0;
+    }
+}
 
 void set_message_hook(void (*hook)(const char *prefix, const char *msg))
 {
@@ -88,7 +115,10 @@ static void vmessage(char *buf, size_t size, const char *prefix,
                      const char *fmt, va_list ap)
 {
     vsnprintf(buf, size, fmt, ap);
-    printf("%s\n", buf);
+    if (console_quiet)
+        snprintf(held, sizeof(held), "%s", buf);
+    else
+        printf("%s\n", buf);
     if (message_hook)
         message_hook(prefix, buf);
 }
