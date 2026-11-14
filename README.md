@@ -1,5 +1,7 @@
 # amibootng
 
+![amibootng booting Linux on QEMU's A3000](doc/demo.gif)
+
 Boots Linux/m68k from AmigaOS.  It runs from `S:Startup-Sequence` after
 `SetPatch`, shows Tux and a menu of the kernels in a drawer, and hands the
 machine to the chosen kernel the way QEMU's `-kernel` does.  It needs a
