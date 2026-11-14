@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include "lvo.h"
 #include "util.h"
 
 /* large single reads came back corrupted from QEMU's A4000 IDE */
@@ -65,19 +66,53 @@ void join(char *out, size_t size, const char *dir, const char *name)
     snprintf(out, size, "%s%s%s", dir, sep ? "/" : "", name);
 }
 
-static char message[160];
+void delay(long ticks)
+{
+    LP1(-198, amigaos_dosbase(), long, ticks, d1);
+}
+
+unsigned long wait_signals(unsigned long signals)
+{
+    return LP1(-318, amigaos_execbase(), unsigned long, signals, d0);
+}
+
+static char last[160];
+static void (*message_hook)(const char *prefix, const char *msg);
+
+void set_message_hook(void (*hook)(const char *prefix, const char *msg))
+{
+    message_hook = hook;
+}
+
+static void vmessage(char *buf, size_t size, const char *prefix,
+                     const char *fmt, va_list ap)
+{
+    vsnprintf(buf, size, fmt, ap);
+    printf("%s\n", buf);
+    if (message_hook)
+        message_hook(prefix, buf);
+}
+
+void message(const char *fmt, ...)
+{
+    char buf[160];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vmessage(buf, sizeof(buf), "", fmt, ap);
+    va_end(ap);
+}
 
 void error(const char *fmt, ...)
 {
     va_list ap;
 
     va_start(ap, fmt);
-    vsnprintf(message, sizeof(message), fmt, ap);
+    vmessage(last, sizeof(last), "error: ", fmt, ap);
     va_end(ap);
-    printf("%s\n", message);
 }
 
 const char *last_error(void)
 {
-    return message;
+    return last;
 }

@@ -21,8 +21,8 @@ mkhunk = [ python, files('tools/mkhunk.py'), find_program('objcopy'),
            elf2hunk ]
 
 programs = {
-  'amibootng': [ 'src/main.c', 'src/menu.c', 'src/splash.c', 'src/elf.c',
-                 'src/bootinfo.c', logo_h ],
+  'amibootng': [ 'src/main.c', 'src/menu.c', 'src/splash.c', 'src/serial.c',
+                 'src/elf.c', 'src/bootinfo.c', logo_h ],
   'amibootng-startup': [ 'src/startup.c' ],
 }
 hunks = {}

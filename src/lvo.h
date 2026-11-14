@@ -21,6 +21,11 @@
                      : "i"(lvo), "r"(_a6), ##__VA_ARGS__                \
                      : "cc", "memory")
 
+#define LP0(lvo, base) ({                                                \
+    LVO_SETUP(base);                                                    \
+    LVO_JSR(lvo);                                                       \
+    _d0; })
+
 /*
  * The arguments are evaluated before any register variable is bound, so
  * an argument that is itself a function call cannot clobber them.
@@ -47,6 +52,16 @@
     register t2 _r2 __asm__(#r2) = _v2;                                 \
     register t3 _r3 __asm__(#r3) = _v3;                                 \
     LVO_JSR(lvo, "r"(_r1), "r"(_r2), "r"(_r3));                         \
+    _d0; })
+
+#define LP4(lvo, base, t1, v1, r1, t2, v2, r2, t3, v3, r3, t4, v4, r4) ({ \
+    t1 _v1 = (v1); t2 _v2 = (v2); t3 _v3 = (v3); t4 _v4 = (v4);         \
+    LVO_SETUP(base);                                                    \
+    register t1 _r1 __asm__(#r1) = _v1;                                 \
+    register t2 _r2 __asm__(#r2) = _v2;                                 \
+    register t3 _r3 __asm__(#r3) = _v3;                                 \
+    register t4 _r4 __asm__(#r4) = _v4;                                 \
+    LVO_JSR(lvo, "r"(_r1), "r"(_r2), "r"(_r3), "r"(_r4));               \
     _d0; })
 
 #define LP5(lvo, base, t1, v1, r1, t2, v2, r2, t3, v3, r3, t4, v4, r4,  \
