@@ -8,6 +8,7 @@
 #include "amigaos.h"
 #include "lvo.h"
 #include "serial.h"
+#include "util.h"
 
 static void *sysbase;
 
@@ -76,6 +77,7 @@ static void start_read(void)
     put16(rd, IO_COMMAND, CMD_READ);
     put32(rd, IO_LENGTH, 1);
     put32(rd, IO_DATA, (unsigned long)&rxbyte);
+    trace("serial: SendIO read");
     SendIO(rd);
     reading = 1;
 }
@@ -83,11 +85,14 @@ static void start_read(void)
 int serial_open(unsigned long baud)
 {
     sysbase = amigaos_execbase();
+    trace("serial: open %lu", baud);
     port = CreateMsgPort();
+    trace("serial: port %p", port);
     if (port)
         rd = CreateIORequest(port, IOEXTSER_SIZE);
     if (rd)
         wr = CreateIORequest(port, IOEXTSER_SIZE);
+    trace("serial: rd %p wr %p", rd, wr);
     if (!wr)
         goto fail;
 
@@ -96,6 +101,10 @@ int serial_open(unsigned long baud)
     if (OpenDevice("serial.device", 0, rd, 0))
         goto fail;
     device_open = 1;
+    trace("serial: opened, rbuflen %lu baud %lu flags %02x",
+          *(unsigned long *)((char *)rd + 52),
+          *(unsigned long *)((char *)rd + IO_BAUD),
+          *((unsigned char *)rd + IO_SERFLAGS));
 
     /* no XON/XOFF: commands are plain text, and so is the kernel console */
     put16(rd, IO_COMMAND, SDCMD_SETPARAMS);
@@ -104,8 +113,10 @@ int serial_open(unsigned long baud)
     put8(rd, IO_WRITELEN, 8);
     put8(rd, IO_STOPBITS, 1);
     put8(rd, IO_SERFLAGS, SERF_SHARED | SERF_XDISABLED);
+    trace("serial: SETPARAMS");
     if (DoIO(rd))
         goto fail;
+    trace("serial: SETPARAMS done");
 
     memcpy(wr, rd, IOEXTSER_SIZE);
     start_read();
@@ -118,6 +129,7 @@ fail:
 
 void serial_close(void)
 {
+    trace("serial: close, reading %d", reading);
     if (reading) {
         AbortIO(rd);
         WaitIO(rd);
@@ -154,7 +166,10 @@ void serial_print(const char *fmt, ...)
     put16(wr, IO_COMMAND, CMD_WRITE);
     put32(wr, IO_LENGTH, len + 2);
     put32(wr, IO_DATA, (unsigned long)buf);
+    trace("serial: write %d at %p", len + 2, buf);
     DoIO(wr);
+    trace("serial: write done, error %d",
+          *((signed char *)wr + IO_ERROR));
 }
 
 int serial_read(char **out)
@@ -165,6 +180,7 @@ int serial_read(char **out)
         unsigned char c = rxbyte;
         int err = WaitIO(rd);
 
+        trace("serial: read %02x error %d", c, err);
         reading = 0;
         if (err && err != SERERR_LINEERR && err != SERERR_PARITYERR &&
             err != SERERR_BUFOVERFLOW && err != SERERR_DETECTEDBREAK) {

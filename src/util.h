@@ -39,4 +39,14 @@ void quiet_console(int quiet);
 void error(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 const char *last_error(void);
 
+/*
+ * With -Dtrace=true, trace() writes to the serial port through exec's
+ * RawPutChar, which bypasses serial.device, prefixed with the stack pointer.
+ */
+#ifdef AMIBOOTNG_TRACE
+void trace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+#else
+#define trace(...) do { } while (0)
+#endif
+
 #endif

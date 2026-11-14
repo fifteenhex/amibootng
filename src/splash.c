@@ -118,6 +118,7 @@ void splash_logo(int which)
     if (!screen || !scale || which == logo)
         return;
     logo = which;
+    trace("splash: logo %d", which);
     SetAPen(rport, PEN_BLACK);
     RectFill(rport, logo_x, logo_y, logo_x + LOGO_WIDTH * scale - 1,
              logo_y + LOGO_HEIGHT * scale - 1);
@@ -135,6 +136,7 @@ void splash_logo(int which)
                      logo_x + end * scale - 1, logo_y + (y + 1) * scale - 1);
         }
     }
+    trace("splash: logo drawn");
 }
 
 /* text line n below the logo, centred, optionally on a bar */
@@ -196,12 +198,15 @@ int splash_open(int lines)
     }
     colours[i].index = -1;
 
+    trace("splash: OpenScreen");
     screen = OpenScreenTagList(screen_tags);
+    trace("splash: screen %p", screen);
     if (!screen)
         goto fail;
     w = field16(screen, SC_WIDTH);
     h = field16(screen, SC_HEIGHT);
     window = open_window(w, h);
+    trace("splash: window %p, %dx%d", window, w, h);
     if (!window)
         goto fail;
 
@@ -290,6 +295,7 @@ void splash_draw_menu(const char *const *labels, int n, int sel,
 
     if (!screen)
         return;
+    trace("splash: draw_menu");
     for (i = 0; i < n; i++)
         draw_line(i, labels[i], i == sel);
     draw_line(n, status, 0);

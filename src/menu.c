@@ -144,19 +144,24 @@ static int choose(const char *const *labels, int n, int def, int seconds)
     unsigned long signals;
     int entry;
 
+    trace("menu: choose %d entries, default %d", n, sel);
     print_entries(labels, n, sel);
+    trace("menu: logo");
     show_logo(sel, n);
+    trace("menu: loop");
     if (!counting)
         splash_draw_menu(labels, n, sel, hint);
     for (;;) {
         if (counting && ticks % TICKS_PER_SEC == 0) {
             snprintf(status, sizeof(status), "%s in %d s", labels[sel],
                      ticks / TICKS_PER_SEC);
+            trace("menu: %s", status);
             splash_draw_menu(labels, n, sel, status);
             serial_print("%s", status);
         }
 
         while ((event = next_event(&entry, &line))) {
+            trace("menu: event %d", event);
             if (event == MENU_KEY)
                 continue;
             if (counting) {
@@ -238,8 +243,10 @@ int boot_menu(const char *path, const struct options *o)
     int n = 1, i, choice = 0, is_dir = 0, screen = 0, serial = 0;
     AmigaDir *d;
 
+    trace("menu: boot_menu %s", path);
     if (o->serial) {
         serial = !serial_open(o->serial);
+        trace("menu: serial_open %s", serial ? "ok" : "failed");
         if (serial)
             set_message_hook(serial_message);
         else
@@ -262,13 +269,16 @@ int boot_menu(const char *path, const struct options *o)
     }
     labels[n] = "AmigaOS (Workbench)";
 
+    trace("menu: %d kernels, splash_open", n);
     if (!o->nosplash) {
         screen = !splash_open(n + 3);
+        trace("menu: splash_open %s", screen ? "ok" : "failed");
         if (!screen)
             error("cannot open the screen");
     }
     if (screen || serial)
         choice = choose(labels, n + 1, choice, o->delay);
+    trace("menu: chose %d", choice);
     if (choice < 0 || choice == n) {
         message("boot cancelled");
         return 5;

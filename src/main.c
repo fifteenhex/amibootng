@@ -329,11 +329,22 @@ int main(int argc, char **argv)
                "[kernel arguments]\n");
         return 20;
     }
+#ifdef AMIBOOTNG_TRACE
+    {
+        char *task = *(char **)((char *)amigaos_execbase() + 276);
+
+        trace("main: " AMIBOOTNG_VERSION " task %p stack %08lx-%08lx, "
+              "attnflags %04x", task, *(unsigned long *)(task + 58),
+              *(unsigned long *)(task + 62), amigaos_attnflags());
+    }
+#endif
     n = expand_args(argc - 2, argv + 2, args, buf, sizeof(buf));
     if (n < 0 || parse_options(n, args, &o, 1))
         return 20;
 
+    trace("main: options parsed");
     ret = boot_menu(argv[1], &o);
+    trace("main: boot_menu returned %d", ret);
     if (ret >= 20) {
         message("returning to AmigaOS");
         if (splash_error(last_error()))
