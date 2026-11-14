@@ -1,7 +1,11 @@
-; $VER: Install-amibootng 1.0 (13.11.2026)
+; $VER: Install-amibootng 1.1 (14.11.2026)
 
 ; Installer's closing "can be found in your ... drawer" names this
 (set @default-dest "C:")
+
+; run again, this updates C:amibootng and the Startup-Sequence block and
+; keeps amibootng.args
+(set #update (= (exists "C:amibootng") 1))
 
 (set #dir
   (askdir
@@ -13,13 +17,16 @@
     (default "SYS:Linux")
     (newpath)))
 
-(set #delay
-  (asknumber
-    (prompt "Seconds to count down before booting the default kernel "
-            "(0 boots it straight away).")
-    (help @asknumber-help)
-    (range 0 60)
-    (default 5)))
+(set #args (tackon #dir "amibootng.args"))
+(set #new-args (= (exists #args) 0))
+(if #new-args
+  (set #delay
+    (asknumber
+      (prompt "Seconds to count down before booting the default kernel "
+              "(0 boots it straight away).")
+      (help @asknumber-help)
+      (range 0 60)
+      (default 5))))
 
 (set #startup
   (askbool
@@ -38,8 +45,7 @@
   (source "amibootng")
   (dest "C:"))
 
-(set #args (tackon #dir "amibootng.args"))
-(if (= (exists #args) 0)
+(if #new-args
   (textfile
     (prompt ("Writing %s" #args))
     (help @textfile-help)
@@ -57,4 +63,6 @@
     (abort "S:Startup-Sequence could not be changed.  Add this after "
            "SetPatch:\n\nC:amibootng \"" #dir "\" \"@" #args "\"")))
 
-(exit "Copy your kernels to " #dir "; vmlinux is the default.")
+(if #update
+  (exit "amibootng has been updated; " #args " is unchanged.")
+  (exit "Copy your kernels to " #dir "; vmlinux is the default."))

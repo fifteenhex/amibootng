@@ -86,6 +86,7 @@ the Install disk of AmigaOS 3.x.  `Install-amibootng` copies amibootng to
 `C:`, makes a drawer for the kernels (`SYS:Linux`) with an
 `amibootng.args`, and adds amibootng to `S:Startup-Sequence` after
 `SetPatch`, keeping the original as `S:Startup-Sequence.pre-amibootng`.
+Running it again updates amibootng and leaves `amibootng.args` alone.
 `Remove-amibootng` takes it out again.
 
 ## Building
