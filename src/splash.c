@@ -10,14 +10,13 @@
 #include "splash.h"
 #include "logo.h"
 
-static void *sysbase, *intuitionbase, *gfxbase, *dosbase;
+static void *sysbase, *intuitionbase, *gfxbase;
 
 #define OpenLibrary(n, v)       ((void *)LP2(-552, sysbase,             \
         const char *, n, a1, long, v, d0))
 #define CloseLibrary(l)         LP1(-414, sysbase, void *, l, a1)
 #define GetMsg(port)            ((void *)LP1(-372, sysbase, void *, port, a0))
 #define ReplyMsg(m)             LP1(-378, sysbase, void *, m, a1)
-#define Wait(signals)           LP1(-318, sysbase, unsigned long, signals, d0)
 #define OpenScreenTagList(t)    ((void *)LP2(-612, intuitionbase,       \
         void *, NULL, a0, const unsigned long *, t, a1))
 #define CloseScreen(s)          LP1(-66, intuitionbase, void *, s, a0)
@@ -37,7 +36,6 @@ static void *sysbase, *intuitionbase, *gfxbase, *dosbase;
         long, x0, d0, long, y0, d1, long, x1, d2, long, y1, d3)
 #define SetAPen(rp, pen)        LP2(-342, gfxbase, void *, rp, a1, long, pen, d0)
 #define SetDrMd(rp, mode)       LP2(-354, gfxbase, void *, rp, a1, long, mode, d0)
-#define Delay(ticks)            LP1(-198, dosbase, long, ticks, d1)
 
 /* struct Screen, Window, IntuiMessage and RastPort fields */
 #define SC_WIDTH                12
@@ -89,9 +87,6 @@ static void *sysbase, *intuitionbase, *gfxbase, *dosbase;
 #define PEN_BAR                 2
 
 #define LOGO_GAP                8       /* between the logo and the text */
-#define TICKS_PER_SEC           50
-#define POLL_TICKS              5
-#define ERROR_SECONDS           10
 
 struct colorspec {
     short index;
@@ -177,10 +172,9 @@ int splash_open(int lines)
     int i, w, h, text_h;
 
     sysbase = amigaos_execbase();
-    dosbase = amigaos_dosbase();
     intuitionbase = OpenLibrary("intuition.library", 36);
     gfxbase = OpenLibrary("graphics.library", 36);
-    if (!intuitionbase || !gfxbase || !dosbase)
+    if (!intuitionbase || !gfxbase)
         goto fail;
 
     for (i = 0; i < LOGO_COLOURS; i++) {
@@ -250,92 +244,64 @@ static int get_event(unsigned long *class, int *code, int *y)
     return 1;
 }
 
-static void draw_menu(const char *const *labels, int n, int sel, int counting)
+void splash_draw_menu(const char *const *labels, int n, int sel,
+                      const char *status)
 {
     int i;
 
+    if (!screen)
+        return;
     for (i = 0; i < n; i++)
         draw_line(i, labels[i], i == sel);
-    draw_line(n, counting ? "" : "Return or a click boots the selection", 0);
+    draw_line(n, status, 0);
     draw_line(n + 1, "Esc or right button: Workbench", 0);
 }
 
-int splash_menu(const char *const *labels, int n, int def, int seconds)
+enum menu_event splash_event(int *entry)
 {
-    int sel = def, ticks = seconds * TICKS_PER_SEC, counting = ticks > 0;
     unsigned long class;
-    int code, y, i;
-    char buf[64];
+    int code, y;
 
-    draw_menu(labels, n, sel, counting);
-    for (;;) {
-        if (counting && ticks % TICKS_PER_SEC == 0) {
-            snprintf(buf, sizeof(buf), "%s in %d s", labels[sel],
-                     ticks / TICKS_PER_SEC);
-            draw_line(n, buf, 0);
-        }
-
-        while (get_event(&class, &code, &y)) {
-            if (class == IDCMP_RAWKEY) {
-                if (code == KEY_RETURN || code == KEY_ENTER)
-                    return sel;
-                if (code == KEY_ESC)
-                    return -1;
-                if (code != KEY_UP && code != KEY_DOWN)
-                    continue;
-                sel = (sel + (code == KEY_UP ? n - 1 : 1)) % n;
-            } else if (class == IDCMP_MOUSEBUTTONS) {
-                if (code == MENUDOWN)
-                    return -1;
-                if (code != SELECTDOWN)
-                    continue;
-                i = y >= text_y ? (y - text_y) / line_h : -1;
-                if (i >= 0 && i < n)
-                    return i;
-            }
-            counting = 0;
-            draw_menu(labels, n, sel, counting);
-        }
-
-        if (!counting) {
-            unsigned char bit = *((unsigned char *)
-                                  field_ptr(window, WD_USERPORT) + MP_SIGBIT);
-
-            Wait(1UL << bit);
-        } else if ((ticks -= POLL_TICKS) <= 0) {
-            return sel;
-        } else {
-            Delay(POLL_TICKS);
+    while (screen && get_event(&class, &code, &y)) {
+        if (class == IDCMP_RAWKEY) {
+            if (code == KEY_RETURN || code == KEY_ENTER)
+                return MENU_BOOT;
+            if (code == KEY_ESC)
+                return MENU_CANCEL;
+            if (code == KEY_UP)
+                return MENU_UP;
+            if (code == KEY_DOWN)
+                return MENU_DOWN;
+            if (code < 0x80)
+                return MENU_KEY;
+        } else if (class == IDCMP_MOUSEBUTTONS) {
+            if (code == MENUDOWN)
+                return MENU_CANCEL;
+            if (code != SELECTDOWN)
+                continue;
+            *entry = y >= text_y ? (y - text_y) / line_h : -1;
+            return MENU_PICK;
         }
     }
+    return MENU_NONE;
 }
 
-/* wait for a key or a button, for up to seconds */
-static void wait_input(int seconds)
+unsigned long splash_signal(void)
 {
-    int ticks, code, y;
-    unsigned long class;
-
-    for (ticks = seconds * TICKS_PER_SEC; ticks > 0; ticks -= POLL_TICKS) {
-        while (get_event(&class, &code, &y))
-            if ((class == IDCMP_RAWKEY && code < 0x80) ||
-                (class == IDCMP_MOUSEBUTTONS &&
-                 (code == SELECTDOWN || code == MENUDOWN)))
-                return;
-        Delay(POLL_TICKS);
-    }
+    return screen ? 1UL << *((unsigned char *)field_ptr(window, WD_USERPORT)
+                             + MP_SIGBIT) : 0;
 }
 
-void splash_error(const char *s)
+int splash_error(const char *s)
 {
     if (!screen)
-        return;
+        return 0;
     /* the boot console may have opened in front of us */
     ScreenToFront(screen);
     ActivateWindow(window);
     splash_status(s);
     draw_line(1, "Press a key to go to Workbench", 0);
-    wait_input(ERROR_SECONDS);
+    return 1;
 }
 
 void splash_close(void)
@@ -348,5 +314,5 @@ void splash_close(void)
         CloseLibrary(gfxbase);
     if (intuitionbase)
         CloseLibrary(intuitionbase);
-    window = screen = dosbase = gfxbase = intuitionbase = NULL;
+    window = screen = gfxbase = intuitionbase = NULL;
 }

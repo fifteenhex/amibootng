@@ -12,6 +12,7 @@
 #include "boot.h"
 #include "main.h"
 #include "menu.h"
+#include "serial.h"
 #include "splash.h"
 #include "util.h"
 
@@ -21,6 +22,7 @@
  * The tables take tens of KB on the machines tried; 1MB leaves room.
  */
 #define RAMDISK_GAP     0x100000UL
+#define ERROR_SECONDS   10
 
 /* the kernel's amiga_models[], from AMI_500 */
 static const char *const models[] = {
@@ -29,23 +31,37 @@ static const char *const models[] = {
 };
 
 /* amibootng's options, and the kernel command line from the rest */
-int parse_options(int argc, char **argv, struct options *o)
+int parse_options(int argc, char **argv, struct options *o, int menu)
 {
-    int i;
+    char *end;
+    int i, menu_only;
 
     memset(o, 0, sizeof(*o));
     o->delay = DEFAULT_DELAY;
     for (i = 0; i < argc; i++) {
+        menu_only = 0;
         if (!strncmp(argv[i], "ramdisk=", 8)) {
             o->ramdisk = argv[i] + 8;
         } else if (!strncmp(argv[i], "model=", 6)) {
             o->model = argv[i] + 6;
-        } else if (!strncmp(argv[i], "delay=", 6)) {
-            o->delay = atoi(argv[i] + 6);
         } else if (!strcmp(argv[i], "noboot")) {
             o->noboot = 1;
+        } else if (!strncmp(argv[i], "delay=", 6)) {
+            o->delay = atoi(argv[i] + 6);
+            menu_only = 1;
         } else if (!strcmp(argv[i], "nosplash")) {
             o->nosplash = 1;
+            menu_only = 1;
+        } else if (!strcmp(argv[i], "serial")) {
+            o->serial = DEFAULT_BAUD;
+            menu_only = 1;
+        } else if (!strncmp(argv[i], "serial=", 7)) {
+            o->serial = strtoul(argv[i] + 7, &end, 10);
+            if (!o->serial || *end) {
+                error("bad baud rate %s", argv[i] + 7);
+                return -1;
+            }
+            menu_only = 1;
         } else {
             size_t len = strlen(o->cmdline);
 
@@ -56,6 +72,10 @@ int parse_options(int argc, char **argv, struct options *o)
                       (int)sizeof(o->cmdline) - 1);
                 return -1;
             }
+        }
+        if (menu_only && !menu) {
+            error("%s only works on amibootng's command line", argv[i]);
+            return -1;
         }
     }
     return 0;
@@ -187,16 +207,16 @@ int boot(const char *kernel, const struct options *o)
     len = bp.ramdisk_addr ? bp.ramdisk_addr - base + bp.ramdisk_size
                           : len + bi_len;
 
-    /* noboot is for trying things from a Shell, where this is seen */
     if (o->noboot) {
-        printf("%s: entry 0x%08lx, %lu bytes to 0x%08lx, \"%s\"\n",
-               kernel, base + ki.entry, len, base, o->cmdline);
+        message("%s: entry 0x%08lx, %lu bytes to 0x%08lx, \"%s\"",
+                kernel, base + ki.entry, len, base, o->cmdline);
         ret = 0;
         goto out;
     }
 
     amigaos_close(fh);
     splash_status("Starting Linux...");
+    serial_close();
     /* head.S loads its own stack pointer before using the stack */
     amigaos_takeover_reloc(region, (void *)base, len,
                            (void *)(base + ki.entry),
@@ -273,6 +293,19 @@ int expand_args(int argc, char **in, char **out, char *buf,
     return n;
 }
 
+/* until a key, a click or a serial line, for up to seconds */
+static void wait_for_input(int seconds)
+{
+    int ticks, entry;
+    char *line;
+
+    for (ticks = seconds * TICKS_PER_SEC; ticks > 0; ticks -= POLL_TICKS) {
+        if (splash_event(&entry) || serial_read(&line) == SERIAL_LINE)
+            return;
+        delay(POLL_TICKS);
+    }
+}
+
 int main(int argc, char **argv)
 {
     static char *args[ARGV_MAX];
@@ -286,12 +319,16 @@ int main(int argc, char **argv)
         return 20;
     }
     n = expand_args(argc - 2, argv + 2, args, buf, sizeof(buf));
-    if (n < 0 || parse_options(n, args, &o))
+    if (n < 0 || parse_options(n, args, &o, 1))
         return 20;
 
     ret = boot_menu(argv[1], &o);
-    if (ret >= 20)
-        splash_error(last_error());
+    if (ret >= 20) {
+        message("returning to AmigaOS");
+        if (splash_error(last_error()))
+            wait_for_input(ERROR_SECONDS);
+    }
     splash_close();
+    serial_close();
     return ret;
 }
